@@ -11,6 +11,7 @@
 - [Синтаксис языка (Syntax)](./docs/syntax.md)
 - [Объектная модель (Object)](./docs/object.md)
 - [Интерпретатор (Evaluator)](./docs/evaluator.md)
+- [Компилятор (Compiler)](./docs/bytecodes.md)
 - [Точка входа (Main)](./docs/main.md)
 - [Глоссарий](#глоссарий)
 

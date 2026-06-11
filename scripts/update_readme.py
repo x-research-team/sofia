@@ -38,7 +38,7 @@ MARKERS = {
 # 9Router
 NINEROUTER_URL = os.environ.get("NINEROUTER_URL", "")
 NINEROUTER_KEY = os.environ.get("NINEROUTER_KEY", "")
-LLM_MODEL = os.environ.get("LLM_MODEL", "openai/gpt-4o")
+LLM_MODEL = os.environ.get("LLM_MODEL", "auto")
 
 
 def find_rs_files() -> List[Path]:
@@ -241,7 +241,7 @@ def replace_section(content: str, section_name: str, new_section_content: str) -
 
 def build_structure_section(project_data: Dict) -> str:
     """Собрать секцию 'Структура проекта'."""
-    lines = ["```"]
+    lines = ["```", "src/"]
     # Собираем дерево директорий и файлов
     dirs_seen = set()
     for f in project_data["files"]:

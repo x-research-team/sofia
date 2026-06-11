@@ -377,7 +377,13 @@ impl VM {
                 | Opcode::SetProperty
                 | Opcode::This
                 | Opcode::Super
-                | Opcode::MapToAst => {
+                | Opcode::MapToAst
+                | Opcode::ReturnValue
+                | Opcode::GetFree
+                | Opcode::SetFree
+                | Opcode::GetCurrentClosure
+                | Opcode::Closure
+                | Opcode::GetBuiltin => {
                     return Err(format!("Опкод {} пока не реализован", opcode.mnemonic()));
                 }
 

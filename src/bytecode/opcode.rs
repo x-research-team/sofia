@@ -100,6 +100,20 @@ pub enum Opcode {
     NoOp = 40,
     /// Связать текущий опкод с узлом AST (для отладки). Операнд: ID узла AST (2 байта).
     MapToAst = 41,
+
+    // === ФУНКЦИИ И ЗАМЫКАНИЯ ===
+    /// Возврат значения из функции (top of stack).
+    ReturnValue = 42,
+    /// Получить free-переменную из замыкания. Операнд: индекс (1 байт).
+    GetFree = 45,
+    /// Установить free-переменную в замыкании. Операнд: индекс (1 байт).
+    SetFree = 46,
+    /// Загрузить текущее замыкание (для рекурсии).
+    GetCurrentClosure = 47,
+    /// Создать замыкание. Операнды: индекс константы (2 байта) + количество free-переменных (1 байт).
+    Closure = 48,
+    /// Получить встроенную функцию. Операнд: индекс (1 байт).
+    GetBuiltin = 49,
 }
 
 impl Opcode {
@@ -147,6 +161,12 @@ impl Opcode {
             Opcode::Null => "NULL",
             Opcode::NoOp => "NO_OP",
             Opcode::MapToAst => "MAP_TO_AST",
+            Opcode::ReturnValue => "RETURN_VALUE",
+            Opcode::GetFree => "GET_FREE",
+            Opcode::SetFree => "SET_FREE",
+            Opcode::GetCurrentClosure => "GET_CURRENT_CLOSURE",
+            Opcode::Closure => "CLOSURE",
+            Opcode::GetBuiltin => "GET_BUILTIN",
         }
     }
 
@@ -169,7 +189,16 @@ impl Opcode {
             | Opcode::MapToAst => &[2],
 
             // Опкоды с однобайтовым операндом
-            Opcode::GetLocal | Opcode::SetLocal | Opcode::Call | Opcode::New => &[1],
+            Opcode::GetLocal
+            | Opcode::SetLocal
+            | Opcode::Call
+            | Opcode::New
+            | Opcode::GetFree
+            | Opcode::SetFree
+            | Opcode::GetBuiltin => &[1],
+
+            // Опкоды с несколькими операндами
+            Opcode::Closure => &[2, 1],
 
             // Опкоды без операндов
             Opcode::Add
@@ -196,7 +225,9 @@ impl Opcode {
             | Opcode::Null
             | Opcode::This
             | Opcode::Super
-            | Opcode::NoOp => &[],
+            | Opcode::NoOp
+            | Opcode::ReturnValue
+            | Opcode::GetCurrentClosure => &[],
         }
     }
 
@@ -244,6 +275,12 @@ impl Opcode {
             39 => Some(Opcode::Null),
             40 => Some(Opcode::NoOp),
             41 => Some(Opcode::MapToAst),
+            42 => Some(Opcode::ReturnValue),
+            45 => Some(Opcode::GetFree),
+            46 => Some(Opcode::SetFree),
+            47 => Some(Opcode::GetCurrentClosure),
+            48 => Some(Opcode::Closure),
+            49 => Some(Opcode::GetBuiltin),
             _ => None,
         }
     }

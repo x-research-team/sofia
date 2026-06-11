@@ -52,31 +52,80 @@ graph TD
 ## 📁 Структура проекта
 
 <!-- BEGIN structure -->
-*Автоматически генерируется...*
+```
+src/
+    ast.rs
+        disassembler.rs
+        instructions.rs
+        mod.rs
+        opcode.rs
+    compiler.rs
+    evaluator.rs
+    lexer.rs
+    lib.rs
+    main.rs
+    object.rs
+    parser.rs
+    token.rs
+        mod.rs
+```
 <!-- END structure -->
 
 ## 🏗 Архитектура
 
 <!-- BEGIN architecture -->
-*Автоматически генерируется...*
+```mermaid
+graph LR
+    A[Source Code] --> B(Lexer)
+    B --> C(Parser)
+    C --> D{AST}
+    D --> E(Compiler)
+    E --> F(Bytecode)
+    F --> G(VM)
+    G --> H[Result]
+    D -.-> I(Evaluator - fallback)
+    I --> H
+```
 <!-- END architecture -->
 
 ## 📦 Модули
 
 <!-- BEGIN modules -->
-*Автоматически генерируется...*
+| Модуль | Публичные типы | Описание |
+|---|---|---|
+| `ast` | Program, LetStatement, Identifier, ReturnStatement, ExpressionStatement, BlockStatement, IntegerLiteral, BooleanLiteral, PrefixExpression, InfixExpression, IfExpression, FunctionLiteral, CallExpression, StringLiteral, ArrayLiteral, ClassDeclaration, InterfaceDeclaration, StructDeclaration, PropertyDeclaration, MethodDeclaration, MethodSignatureDeclaration, NewExpression, ThisExpression, SuperExpression, PropertyAccessExpression, MethodCallExpression, MatchExpression, MatchArm, RangePattern, StructPattern, Node, Statement, Expression, AccessModifier, Pattern |  |
+| `disassembler` |  |  |
+| `instructions` | Instructions |  |
+| `mod` |  |  |
+| `opcode` | Opcode |  |
+| `compiler` | Compiler, CompilerError |  |
+| `evaluator` |  |  |
+| `lexer` | Lexer |  |
+| `lib` |  |  |
+| `main` |  |  |
+| `object` | Class, ClassInstance, Struct, StructInstance, Interface, Method, MethodSignature, Environment, Object |  |
+| `parser` | Parser, ParserError |  |
+| `token` | Token, TokenType |  |
+| `mod` | VM, CallFrame |  |
 <!-- END modules -->
 
 ## 📊 Статистика
 
 <!-- BEGIN stats -->
-*Автоматически генерируется...*
+- **Файлов:** 14
+- **Модулей:** 12
+- **Публичных структур:** 45
+- **Публичных enum:** 10
+- **Публичных функций:** 2
+- **Строк кода:** 7351
+- **Модулей с тестами:** 8
 <!-- END stats -->
 
 ## 🔄 Последние изменения
 
 <!-- BEGIN changes -->
-*Автоматически генерируется...*
+*Автообновлено: 2026-06-11 22:33:33*
+*Всего модулей: 12, строк кода: 7351*
 <!-- END changes -->
 
 ## 📖 Глоссарий

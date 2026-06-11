@@ -383,3 +383,83 @@ def setup_logging():
             logging.StreamHandler(),
         ],
     )
+
+
+def main():
+    setup_logging()
+
+    parser = argparse.ArgumentParser(description="Sync README.md with project code")
+    parser.add_argument("--trigger", choices=["post-commit", "manual"], default="manual")
+    parser.add_argument("--rollback", action="store_true", help="Rollback to last backup")
+    args = parser.parse_args()
+
+    # Rollback mode
+    if args.rollback:
+        if rollback_readme():
+            logging.info("Rollback completed")
+        else:
+            logging.error("Rollback failed")
+            sys.exit(1)
+        return
+
+    commit_hash = ""
+    if args.trigger == "post-commit":
+        try:
+            commit_hash = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                capture_output=True, text=True, cwd=PROJECT_ROOT, timeout=5,
+            ).stdout.strip()
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+
+    logging.info("Sync started | trigger=%s commit=%s", args.trigger, commit_hash)
+
+    # 1. Backup
+    backup_path = backup_readme()
+    if backup_path:
+        logging.info("Backup saved: %s", backup_path.name)
+
+    # 2. Parse project
+    project_data = parse_project()
+    cargo_data = parse_cargo()
+    logging.info(
+        "Parsed %d .rs files, %d public symbols",
+        project_data["total_files"],
+        len(project_data["structs"]) + len(project_data["enums"]) + len(project_data["functions"]),
+    )
+
+    # 3. LLM generation
+    descriptions = generate_module_descriptions(project_data)
+    changes = generate_changes_summary()
+    if descriptions:
+        logging.info("LLM: generated descriptions for %d modules", len(descriptions))
+    if changes:
+        logging.info("LLM: generated changes summary (%d chars)", len(changes))
+
+    # 4. Build sections
+    readme = read_current_readme()
+
+    readme = replace_section(readme, "structure", build_structure_section(project_data))
+    readme = replace_section(readme, "architecture", build_architecture_section(project_data, descriptions))
+    readme = replace_section(readme, "modules", build_modules_section(project_data, descriptions))
+    readme = replace_section(readme, "stats", build_stats_section(project_data))
+    readme = replace_section(readme, "changes", build_changes_section(changes, project_data))
+
+    # 5. Validate
+    is_valid, errors = validate_readme(readme)
+    if not is_valid:
+        for err in errors:
+            logging.error("Validation failed: %s", err)
+        logging.error("README not updated — validation failed")
+        sys.exit(1)
+
+    logging.info("Validation passed (size=%d bytes, sections=%d)", len(readme), len(MARKERS))
+
+    # 6. Write
+    README_PATH.write_text(readme, encoding="utf-8")
+    logging.info("README updated successfully")
+    logging.info("Sync completed")
+
+
+if __name__ == "__main__":
+    main()

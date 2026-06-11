@@ -53,8 +53,8 @@ graph TD
 
 <!-- BEGIN structure -->
 ```
-src/
     ast.rs
+    bytecode/
         disassembler.rs
         instructions.rs
         mod.rs
@@ -67,6 +67,7 @@ src/
     object.rs
     parser.rs
     token.rs
+    vm/
         mod.rs
 ```
 <!-- END structure -->
@@ -94,10 +95,10 @@ graph LR
 | Модуль | Публичные типы | Описание |
 |---|---|---|
 | `ast` | Program, LetStatement, Identifier, ReturnStatement, ExpressionStatement, BlockStatement, IntegerLiteral, BooleanLiteral, PrefixExpression, InfixExpression, IfExpression, FunctionLiteral, CallExpression, StringLiteral, ArrayLiteral, ClassDeclaration, InterfaceDeclaration, StructDeclaration, PropertyDeclaration, MethodDeclaration, MethodSignatureDeclaration, NewExpression, ThisExpression, SuperExpression, PropertyAccessExpression, MethodCallExpression, MatchExpression, MatchArm, RangePattern, StructPattern, Node, Statement, Expression, AccessModifier, Pattern |  |
-| `disassembler` |  |  |
-| `instructions` | Instructions |  |
-| `mod` |  |  |
-| `opcode` | Opcode |  |
+| `bytecode/disassembler` |  |  |
+| `bytecode/instructions` | Instructions |  |
+| `bytecode` |  |  |
+| `bytecode/opcode` | Opcode |  |
 | `compiler` | Compiler, CompilerError |  |
 | `evaluator` |  |  |
 | `lexer` | Lexer |  |
@@ -106,7 +107,7 @@ graph LR
 | `object` | Class, ClassInstance, Struct, StructInstance, Interface, Method, MethodSignature, Environment, Object |  |
 | `parser` | Parser, ParserError |  |
 | `token` | Token, TokenType |  |
-| `mod` | VM, CallFrame |  |
+| `vm` | VM, CallFrame |  |
 <!-- END modules -->
 
 ## 📊 Статистика
@@ -124,7 +125,7 @@ graph LR
 ## 🔄 Последние изменения
 
 <!-- BEGIN changes -->
-*Автообновлено: 2026-06-11 22:33:33*
+*Автообновлено: 2026-06-11 22:38:39*
 *Всего модулей: 12, строк кода: 7351*
 <!-- END changes -->
 

@@ -241,10 +241,21 @@ def replace_section(content: str, section_name: str, new_section_content: str) -
 
 def build_structure_section(project_data: Dict) -> str:
     """Собрать секцию 'Структура проекта'."""
-    lines = ["```", "src/"]
+    lines = ["```"]
+    # Собираем дерево директорий и файлов
+    dirs_seen = set()
     for f in project_data["files"]:
-        indent = "    " * str(f["path"]).count("/")
-        lines.append(f"{indent}{os.path.basename(f['path'])}")
+        parts = Path(f["path"]).parts  # e.g. ('src', 'bytecode', 'opcode.rs')
+        # Добавляем промежуточные директории
+        for i in range(1, len(parts) - 1):
+            dir_path = "/".join(parts[: i + 1])
+            if dir_path not in dirs_seen:
+                dirs_seen.add(dir_path)
+                indent = "    " * i
+                lines.append(f"{indent}{parts[i]}/")
+        # Добавляем файл
+        indent = "    " * (len(parts) - 1)
+        lines.append(f"{indent}{parts[-1]}")
     lines.append("```")
     return "\n".join(lines)
 
@@ -253,9 +264,17 @@ def build_modules_section(project_data: Dict, descriptions: Dict[str, str]) -> s
     """Собрать секцию 'Модули'."""
     lines = ["| Модуль | Публичные типы | Описание |", "|---|---|---|"]
     for f in project_data["files"]:
-        mod_name = Path(f["path"]).stem
+        path = Path(f["path"])
+        # Используем относительный путь от src/ как имя модуля
+        # e.g. src/bytecode/opcode.rs -> bytecode/opcode, src/vm/mod.rs -> vm
+        rel = path.relative_to("src") if str(path).startswith("src/") else path
+        if rel.stem == "mod":
+            mod_name = str(rel.parent) if str(rel.parent) != "." else "root"
+        else:
+            mod_name = str(rel.with_suffix(""))
         types = ", ".join(f["structs"] + f["enums"])
-        desc = descriptions.get(mod_name, "")
+        # Ищем описание по имени модуля или по stem
+        desc = descriptions.get(mod_name) or descriptions.get(path.stem, "")
         lines.append(f"| `{mod_name}` | {types} | {desc} |")
     return "\n".join(lines)
 

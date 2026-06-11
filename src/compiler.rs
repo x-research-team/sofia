@@ -21,13 +21,124 @@ impl From<CompilerError> for String {
     }
 }
 
-/// Информация о локальной переменной.
+// === SYMBOL TABLE ===
+
+/// Область видимости символа.
+#[derive(Debug, Clone, PartialEq)]
+enum SymbolScope {
+    Global,
+    Local,
+    Free,
+    Builtin,
+}
+
+/// Символ в таблице символов.
 #[derive(Debug, Clone)]
-struct LocalVariable {
-    /// Имя переменной.
+struct Symbol {
     name: String,
-    /// Индекс в стеке локальных переменных.
+    scope: SymbolScope,
     index: usize,
+}
+
+/// Таблица символов для отслеживания переменных и областей видимости.
+#[derive(Debug, Clone)]
+struct SymbolTable {
+    outer: Option<Box<SymbolTable>>,
+    store: HashMap<String, Symbol>,
+    num_definitions: usize,
+    free_symbols: Vec<Symbol>,
+}
+
+impl SymbolTable {
+    fn new() -> Self {
+        SymbolTable {
+            outer: None,
+            store: HashMap::new(),
+            num_definitions: 0,
+            free_symbols: Vec::new(),
+        }
+    }
+
+    fn new_enclosed(outer: Box<SymbolTable>) -> Self {
+        SymbolTable {
+            outer: Some(outer),
+            store: HashMap::new(),
+            num_definitions: 0,
+            free_symbols: Vec::new(),
+        }
+    }
+
+    fn define(&mut self, name: String) -> Symbol {
+        let scope = if self.outer.is_some() {
+            SymbolScope::Local
+        } else {
+            SymbolScope::Global
+        };
+        let symbol = Symbol {
+            name: name.clone(),
+            scope,
+            index: self.num_definitions,
+        };
+        self.store.insert(name, symbol.clone());
+        self.num_definitions += 1;
+        symbol
+    }
+
+    fn resolve(&mut self, name: &str) -> Option<Symbol> {
+        if let Some(symbol) = self.store.get(name) {
+            return Some(symbol.clone());
+        }
+
+        if let Some(ref mut outer) = self.outer {
+            let obj = outer.resolve(name)?;
+            if obj.scope == SymbolScope::Global || obj.scope == SymbolScope::Builtin {
+                return Some(obj);
+            }
+            // Захватываем как free-переменную
+            let free = self.define_free(obj);
+            Some(free)
+        } else {
+            None
+        }
+    }
+
+    fn define_free(&mut self, original: Symbol) -> Symbol {
+        self.free_symbols.push(original.clone());
+        let symbol = Symbol {
+            name: original.name,
+            scope: SymbolScope::Free,
+            index: self.free_symbols.len() - 1,
+        };
+        self.store.insert(symbol.name.clone(), symbol.clone());
+        symbol
+    }
+
+    fn define_builtin(&mut self, name: String, index: usize) -> Symbol {
+        let symbol = Symbol {
+            name: name.clone(),
+            scope: SymbolScope::Builtin,
+            index,
+        };
+        self.store.insert(name, symbol.clone());
+        symbol
+    }
+}
+
+// === COMPILER ===
+
+/// Компилятор, преобразующий AST в байткод.
+pub struct Compiler {
+    /// Сгенерированные инструкции байткода.
+    instructions: Instructions,
+
+    /// Таблица символов для отслеживания переменных.
+    symbol_table: SymbolTable,
+
+    /// Стек слоев видимости (scopes).
+    scopes: Vec<Scope>,
+
+    /// Индекс текущего слоя видимости.
+    scope_index: usize,
 }
 
 /// Информация о слое видимости (scope).
@@ -39,38 +150,36 @@ struct Scope {
     num_locals: usize,
 }
 
-/// Компилятор, преобразующий AST в байткод.
-pub struct Compiler {
-    /// Сгенерированные инструкции байткода.
-    instructions: Instructions,
-
-    /// Таблица символов для отслеживания переменных.
-    symbols: HashMap<String, SymbolInfo>,
-
-    /// Стек слоев видимости (scopes).
-    scopes: Vec<Scope>,
-
-    /// Индекс текущего слоя видимости.
-    scope_index: usize,
-}
-
-/// Информация о символе (переменной, функции и т.д.).
+/// Информация о локальной переменной.
 #[derive(Debug, Clone)]
-struct SymbolInfo {
-    /// Имя символа.
+struct LocalVariable {
+    /// Имя переменной.
     name: String,
-    /// true если это глобальная переменная.
-    is_global: bool,
-    /// Индекс (индекс в таблице локальных переменных или индекс константы).
+    /// Индекс в стеке локальных переменных.
     index: usize,
 }
 
 impl Compiler {
     /// Создает новый экземпляр компилятора.
     pub fn new() -> Self {
+        let mut symbol_table = SymbolTable::new();
+
+        // Регистрируем built-in функции
+        let builtins = vec![
+            "len".to_string(),
+            "puts".to_string(),
+            "first".to_string(),
+            "last".to_string(),
+            "rest".to_string(),
+            "push".to_string(),
+        ];
+        for (i, name) in builtins.iter().enumerate() {
+            symbol_table.define_builtin(name.clone(), i);
+        }
+
         Compiler {
             instructions: Instructions::new(),
-            symbols: HashMap::new(),
+            symbol_table,
             scopes: vec![Scope {
                 locals: Vec::new(),
                 num_locals: 0,
@@ -93,14 +202,7 @@ impl Compiler {
             index,
         });
         scope.num_locals += 1;
-        self.symbols.insert(
-            name,
-            SymbolInfo {
-                name: String::new(),
-                is_global: false,
-                index,
-            },
-        );
+        self.symbol_table.define(name);
         index
     }
 
@@ -131,19 +233,21 @@ impl Compiler {
             Statement::Let(let_stmt) => {
                 self.compile_expression(&let_stmt.value)?;
                 let var_name = let_stmt.name.value.clone();
-                let name_idx = self
-                    .instructions
-                    .add_constant(Object::String(var_name.clone()));
-                self.instructions
-                    .emit(Opcode::SetGlobal, &[name_idx as u16]);
-                self.symbols.insert(
-                    var_name,
-                    SymbolInfo {
-                        name: let_stmt.name.value.clone(),
-                        is_global: true,
-                        index: name_idx,
-                    },
-                );
+
+                // Определяем переменную в таблице символов
+                let symbol = self.symbol_table.define(var_name.clone());
+
+                if symbol.scope == SymbolScope::Local {
+                    // Локальная переменная (внутри функции)
+                    self.instructions.emit(Opcode::SetLocal, &[symbol.index as u16]);
+                } else {
+                    // Глобальная переменная
+                    let name_idx = self
+                        .instructions
+                        .add_constant(Object::String(var_name));
+                    self.instructions
+                        .emit(Opcode::SetGlobal, &[name_idx as u16]);
+                }
                 Ok(())
             }
             Statement::Return(ret_stmt) => {
@@ -190,19 +294,27 @@ impl Compiler {
                 Ok(())
             }
             Expression::Identifier(ident) => {
-                if self.is_local(&ident.value) {
-                    let scope = &self.scopes[self.scope_index];
-                    if let Some(local) = scope.locals.iter().find(|l| l.name == ident.value) {
-                        self.instructions
-                            .emit(Opcode::GetLocal, &[local.index as u16]);
-                    }
-                } else if let Some(symbol) = self.symbols.get(&ident.value) {
-                    if symbol.is_global {
-                        let const_idx = self
-                            .instructions
-                            .add_constant(Object::String(ident.value.clone()));
-                        self.instructions
-                            .emit(Opcode::GetGlobal, &[const_idx as u16]);
+                if let Some(symbol) = self.symbol_table.resolve(&ident.value) {
+                    match symbol.scope {
+                        SymbolScope::Global => {
+                            let const_idx = self
+                                .instructions
+                                .add_constant(Object::String(ident.value.clone()));
+                            self.instructions
+                                .emit(Opcode::GetGlobal, &[const_idx as u16]);
+                        }
+                        SymbolScope::Local => {
+                            self.instructions
+                                .emit(Opcode::GetLocal, &[symbol.index as u16]);
+                        }
+                        SymbolScope::Free => {
+                            self.instructions
+                                .emit(Opcode::GetFree, &[symbol.index as u16]);
+                        }
+                        SymbolScope::Builtin => {
+                            self.instructions
+                                .emit(Opcode::GetBuiltin, &[symbol.index as u16]);
+                        }
                     }
                 } else {
                     // Это может быть ошибка, но давайте пока загружать null

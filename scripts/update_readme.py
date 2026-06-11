@@ -216,3 +216,105 @@ def generate_changes_summary() -> Optional[str]:
 Сводка:"""
 
     return llm_generate(prompt)
+
+
+def read_current_readme() -> str:
+    """Прочитать текущий README.md."""
+    if README_PATH.exists():
+        return README_PATH.read_text(encoding="utf-8")
+    return ""
+
+
+def replace_section(content: str, section_name: str, new_section_content: str) -> str:
+    """Заменить содержимое между маркерами BEGIN/END в секции."""
+    begin, end = MARKERS[section_name]
+
+    pattern = re.escape(begin) + r".*?" + re.escape(end)
+    replacement = f"{begin}\n{new_section_content.strip()}\n{end}"
+
+    if re.search(pattern, content, re.DOTALL):
+        return re.sub(pattern, replacement, content, count=1, flags=re.DOTALL)
+    else:
+        logging.warning("Section '%s' markers not found in README", section_name)
+        return content
+
+
+def build_structure_section(project_data: Dict) -> str:
+    """Собрать секцию 'Структура проекта'."""
+    lines = ["```", "src/"]
+    for f in project_data["files"]:
+        indent = "    " * str(f["path"]).count("/")
+        lines.append(f"{indent}{os.path.basename(f['path'])}")
+    lines.append("```")
+    return "\n".join(lines)
+
+
+def build_modules_section(project_data: Dict, descriptions: Dict[str, str]) -> str:
+    """Собрать секцию 'Модули'."""
+    lines = ["| Модуль | Публичные типы | Описание |", "|---|---|---|"]
+    for f in project_data["files"]:
+        mod_name = Path(f["path"]).stem
+        types = ", ".join(f["structs"] + f["enums"])
+        desc = descriptions.get(mod_name, "")
+        lines.append(f"| `{mod_name}` | {types} | {desc} |")
+    return "\n".join(lines)
+
+
+def build_stats_section(project_data: Dict) -> str:
+    """Собрать секцию 'Статистика'."""
+    return (
+        f"- **Файлов:** {project_data['total_files']}\n"
+        f"- **Модулей:** {len(project_data['modules'])}\n"
+        f"- **Публичных структур:** {len(project_data['structs'])}\n"
+        f"- **Публичных enum:** {len(project_data['enums'])}\n"
+        f"- **Публичных функций:** {len(project_data['functions'])}\n"
+        f"- **Строк кода:** {project_data['total_loc']}\n"
+        f"- **Модулей с тестами:** {project_data['test_modules']}"
+    )
+
+
+def build_architecture_section(project_data: Dict, descriptions: Dict[str, str]) -> str:
+    """Собрать секцию 'Архитектура'."""
+    has_compiler = "compiler" in project_data["modules"]
+    has_vm = "vm" in project_data["modules"]
+
+    if has_compiler and has_vm:
+        mermaid = """```mermaid
+graph LR
+    A[Source Code] --> B(Lexer)
+    B --> C(Parser)
+    C --> D{AST}
+    D --> E(Compiler)
+    E --> F(Bytecode)
+    F --> G(VM)
+    G --> H[Result]
+    D -.-> I(Evaluator - fallback)
+    I --> H
+```"""
+    else:
+        mermaid = """```mermaid
+graph LR
+    A[Source Code] --> B(Lexer)
+    B --> C(Parser)
+    C --> D(AST)
+    D --> E(Evaluator)
+    E --> F[Result]
+```"""
+
+    desc_lines = []
+    for mod_name in ["lexer", "parser", "ast", "evaluator", "compiler", "vm"]:
+        if mod_name in project_data["modules"] and mod_name in descriptions:
+            desc_lines.append(f"- **{mod_name.title()}:** {descriptions[mod_name]}")
+
+    return mermaid + "\n\n" + "\n".join(desc_lines)
+
+
+def build_changes_section(changes: Optional[str], project_data: Dict) -> str:
+    """Собрать секцию 'Последние изменения'."""
+    lines = []
+    if changes:
+        lines.append(changes)
+    lines.append("")
+    lines.append(f"*Автообновлено: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*")
+    lines.append(f"*Всего модулей: {len(project_data['modules'])}, строк кода: {project_data['total_loc']}*")
+    return "\n".join(lines)

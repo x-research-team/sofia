@@ -14,6 +14,8 @@ import shutil
 import logging
 import argparse
 import subprocess
+import urllib.request
+import urllib.error
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
@@ -121,3 +123,96 @@ def parse_cargo() -> Dict:
         deps = re.findall(r'^\s*(\w[\w.-]*)\s*=', dep_section, re.MULTILINE)
 
     return {"name": name, "deps": deps}
+
+
+def llm_generate(prompt: str, system_prompt: str = None) -> Optional[str]:
+    """Отправить запрос в 9Router chat completion. Вернуть текст ответа или None."""
+    if not NINEROUTER_URL:
+        return None
+
+    url = f"{NINEROUTER_URL.rstrip('/')}/v1/chat/completions"
+
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+
+    payload = json.dumps({
+        "model": LLM_MODEL,
+        "messages": messages,
+        "max_tokens": 2000,
+        "temperature": 0.3,
+    }).encode("utf-8")
+
+    headers = {"Content-Type": "application/json"}
+    if NINEROUTER_KEY:
+        headers["Authorization"] = f"Bearer {NINEROUTER_KEY}"
+
+    req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+            return result["choices"][0]["message"]["content"]
+    except (urllib.error.URLError, json.JSONDecodeError, KeyError, TimeoutError) as e:
+        logging.warning("LLM request failed: %s", e)
+        return None
+
+
+SYSTEM_PROMPT = """Ты — технический писатель для проекта SOFIA, интерпретатора языка программирования на Rust.
+Опиши осмысленно назначение каждого модуля. Используй русский язык.
+Формат: кратко, 1-2 предложения на модуль. Без лишних деталей."""
+
+
+def generate_module_descriptions(project_data: Dict) -> Dict[str, str]:
+    """Сгенерировать описания модулей через LLM. Вернуть {имя_модуля: описание}."""
+    module_list = "\n".join(f"- {m}" for m in project_data["modules"])
+
+    prompt = f"""Перечисли назначение каждого модуля в проекте SOFIA:
+
+{module_list}
+
+Для каждого модуля дай описание в формате:
+- module_name: краткое описание (1-2 предложения)
+"""
+
+    response = llm_generate(prompt, SYSTEM_PROMPT)
+    if not response:
+        return {}
+
+    descriptions = {}
+    for line in response.split("\n"):
+        match = re.match(r'^\s*[-*]\s*(\w+):\s*(.+)', line)
+        if match:
+            descriptions[match.group(1)] = match.group(2).strip()
+
+    return descriptions
+
+
+def generate_changes_summary() -> Optional[str]:
+    """Сгенерировать описание последних изменений через LLM по git diff."""
+    try:
+        diff = subprocess.run(
+            ["git", "diff", "--stat", "HEAD~3..HEAD"],
+            capture_output=True, text=True, cwd=PROJECT_ROOT, timeout=10,
+        )
+        log = subprocess.run(
+            ["git", "log", "--oneline", "-5"],
+            capture_output=True, text=True, cwd=PROJECT_ROOT, timeout=10,
+        )
+        if not diff.stdout and not log.stdout:
+            return None
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return None
+
+    prompt = f"""На основе следующих данных о коммитах напиши краткую сводку изменений (2-4 предложения) на русском языке:
+
+Последние коммиты:
+{log.stdout}
+
+Изменения:
+{diff.stdout}
+
+Сводка:"""
+
+    return llm_generate(prompt)

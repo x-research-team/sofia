@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """update_readme.py — Автоматическое обновление README.md проекта SOFIA.
 
-Режимы:
-  --trigger=post-commit  : запуск из git hook
-  --trigger=manual       : ручной запуск
-  --rollback             : восстановить предыдущую версию README
+Task 1: Парсинг исходного кода (функции parse_project, parse_cargo, find_rs_files).
+Будущие задачи добавят: CLI, LLM-интеграцию, сборку README, валидацию, git hook.
 """
 
 import os
@@ -50,14 +48,14 @@ def parse_public_symbols(filepath: Path) -> Dict:
     """Извлечь публичные символы из .rs файла."""
     content = filepath.read_text(encoding="utf-8")
     rel_path = filepath.relative_to(PROJECT_ROOT)
-    
+
     modules = re.findall(r'^pub mod (\w+);', content, re.MULTILINE)
     structs = re.findall(r'^pub struct (\w+)', content, re.MULTILINE)
     enums = re.findall(r'^pub enum (\w+)', content, re.MULTILINE)
     fns = re.findall(r'^pub fn (\w+)', content, re.MULTILINE)
-    impls = re.findall(r'^pub? impl(?:<[^>]+>)? (\w+)', content, re.MULTILINE)
+    impls = re.findall(r'^impl(?:<[^>]+>)? (\w+)', content, re.MULTILINE)
     has_tests = "mod tests" in content
-    
+
     return {
         "path": str(rel_path),
         "modules": modules,
@@ -74,14 +72,14 @@ def parse_project() -> Dict:
     """Парсинг всего проекта — возвращает структурированные данные."""
     files = find_rs_files()
     symbols = [parse_public_symbols(f) for f in files]
-    
+
     all_modules = []
     all_structs = []
     all_enums = []
     all_fns = []
     total_loc = 0
     test_modules = 0
-    
+
     for s in symbols:
         all_modules.extend(s["modules"])
         all_structs.extend(s["structs"])
@@ -90,7 +88,7 @@ def parse_project() -> Dict:
         total_loc += s["loc"]
         if s["has_tests"]:
             test_modules += 1
-    
+
     return {
         "files": symbols,
         "modules": sorted(set(all_modules)),
@@ -108,13 +106,13 @@ def parse_cargo() -> Dict:
     cargo_path = PROJECT_ROOT / "Cargo.toml"
     if not cargo_path.exists():
         return {"name": "unknown", "deps": []}
-    
+
     content = cargo_path.read_text(encoding="utf-8")
     name_match = re.search(r'^name\s*=\s*"(.+)"', content, re.MULTILINE)
     name = name_match.group(1) if name_match else "unknown"
-    
+
     deps = re.findall(r'^([a-zA-Z0-9_-]+)\s*=', content, re.MULTILINE)
     # Исключаем секции [package], [lib], [[bin]]
     deps = [d for d in deps if d not in ("package", "lib")]
-    
+
     return {"name": name, "deps": deps}

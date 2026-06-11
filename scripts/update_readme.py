@@ -108,11 +108,16 @@ def parse_cargo() -> Dict:
         return {"name": "unknown", "deps": []}
 
     content = cargo_path.read_text(encoding="utf-8")
-    name_match = re.search(r'^name\s*=\s*"(.+)"', content, re.MULTILINE)
+    name_match = re.search(r'^name\s*=\s*"(.+?)"', content, re.MULTILINE)
     name = name_match.group(1) if name_match else "unknown"
 
-    deps = re.findall(r'^([a-zA-Z0-9_-]+)\s*=', content, re.MULTILINE)
-    # Исключаем секции [package], [lib], [[bin]]
-    deps = [d for d in deps if d not in ("package", "lib")]
+    # Парсим только секцию [dependencies]
+    deps = []
+    dep_match = re.search(
+        r'^\[dependencies\](.*?)(?:^\[|\Z)', content, re.MULTILINE | re.DOTALL
+    )
+    if dep_match:
+        dep_section = dep_match.group(1)
+        deps = re.findall(r'^\s*(\w[\w.-]*)\s*=', dep_section, re.MULTILINE)
 
     return {"name": name, "deps": deps}

@@ -7,3 +7,7 @@
 # already existing elements were commented out
 
 #/target
+
+# README autosync
+.readme_backups/
+.readme_sync.log

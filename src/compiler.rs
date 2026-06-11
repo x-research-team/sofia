@@ -408,6 +408,13 @@ impl Compiler {
                     self.symbol_table.define(param.value.clone());
                 }
 
+                // Эмитируем Jump placeholder для пропуска тела функции в основном коде
+                let jump_placeholder = self.instructions.bytes.len();
+                self.instructions.emit(Opcode::Jump, &[0]);
+
+                // Запоминаем начало тела функции
+                let func_offset = self.instructions.bytes.len();
+
                 // Компилируем тело функции
                 for stmt in &func.body.statements {
                     self.compile_statement(stmt)?;
@@ -421,6 +428,13 @@ impl Compiler {
                     self.instructions.emit(Opcode::Return, &[]);
                 }
 
+                // Патчим Jump placeholder на конец тела функции
+                let end_offset = self.instructions.bytes.len();
+                let high = ((end_offset >> 8) & 0xFF) as u8;
+                let low = (end_offset & 0xFF) as u8;
+                self.instructions.bytes[jump_placeholder + 1] = high;
+                self.instructions.bytes[jump_placeholder + 2] = low;
+
                 // Собираем данные о функции
                 let num_locals = self.symbol_table.num_definitions;
                 let free_symbols = self.symbol_table.free_symbols.clone();
@@ -433,7 +447,7 @@ impl Compiler {
                 // Создаём CompiledFunction и добавляем в пул констант
                 let compiled_fn = Object::CompiledFunction(
                     crate::object::CompiledFunction {
-                        instructions_offset: 0, // Будет исправлено позже
+                        instructions_offset: func_offset,
                         num_locals,
                         num_params: func.parameters.len(),
                     },

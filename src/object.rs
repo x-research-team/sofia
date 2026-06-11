@@ -4,6 +4,14 @@ use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
 
+/// Represents a compiled function's bytecode metadata.
+#[derive(Debug, PartialEq, Clone)]
+pub struct CompiledFunction {
+    pub instructions_offset: usize,
+    pub num_locals: usize,
+    pub num_params: usize,
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum Object {
     Integer(i64),
@@ -20,6 +28,13 @@ pub enum Object {
     StructInstance(Rc<RefCell<StructInstance>>),
     Interface(Rc<RefCell<Interface>>),
     Method(Rc<RefCell<Method>>),
+    CompiledFunction(CompiledFunction),
+    Closure(Box<CompiledFunction>, Vec<Object>),
+    BuiltinFunction {
+        name: String,
+        num_params: i32,
+        handler: fn(Vec<Object>) -> Object,
+    },
 }
 
 impl fmt::Display for Object {
@@ -49,6 +64,18 @@ impl fmt::Display for Object {
             ),
             Object::Interface(i) => write!(f, "interface {}", i.borrow().name),
             Object::Method(m) => write!(f, "method {}", m.borrow().name),
+            Object::CompiledFunction(cf) => write!(
+                f,
+                "compiled fn(offset={}, locals={}, params={})",
+                cf.instructions_offset, cf.num_locals, cf.num_params
+            ),
+            Object::Closure(cf, free) => write!(
+                f,
+                "closure(offset={}, free={})",
+                cf.instructions_offset,
+                free.len()
+            ),
+            Object::BuiltinFunction { name, .. } => write!(f, "builtin fn {}", name),
         }
     }
 }
@@ -99,6 +126,9 @@ impl Object {
             Object::StructInstance(_) => "STRUCT_INSTANCE",
             Object::Interface(_) => "INTERFACE",
             Object::Method(_) => "METHOD",
+            Object::CompiledFunction(_) => "COMPILED_FUNCTION",
+            Object::Closure(_, _) => "CLOSURE",
+            Object::BuiltinFunction { .. } => "BUILTIN_FUNCTION",
         }
     }
 }

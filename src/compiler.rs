@@ -468,6 +468,21 @@ impl Compiler {
 
                 Ok(())
             }
+            Expression::Call(call) => {
+                // Компилируем выражение-функцию (push на стек)
+                self.compile_expression(&call.function)?;
+
+                // Компилируем аргументы (push на стек)
+                for arg in &call.arguments {
+                    self.compile_expression(arg)?;
+                }
+
+                // Эмитируем Call опкод с количеством аргументов
+                self.instructions
+                    .emit(Opcode::Call, &[call.arguments.len() as u16]);
+
+                Ok(())
+            }
             _ => Err(CompilerError::Unsupported(format!(
                 "Неподдерживаемое выражение: {:?}",
                 expression

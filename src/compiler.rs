@@ -398,6 +398,76 @@ impl Compiler {
                     .emit(Opcode::Array, &[arr_expr.elements.len() as u16]);
                 Ok(())
             }
+            Expression::FunctionLiteral(func) => {
+                // Входим в новый scope
+                self.symbol_table =
+                    SymbolTable::new_enclosed(Box::new(self.symbol_table.clone()));
+
+                // Определяем параметры как локальные переменные
+                for param in &func.parameters {
+                    self.symbol_table.define(param.value.clone());
+                }
+
+                // Компилируем тело функции
+                for stmt in &func.body.statements {
+                    self.compile_statement(stmt)?;
+                }
+
+                // Если в конце тела нет ReturnValue, добавляем Return (возврат Null)
+                let last_byte = self.instructions.bytes.last().copied();
+                if last_byte != Some(Opcode::ReturnValue as u8)
+                    && last_byte != Some(Opcode::Return as u8)
+                {
+                    self.instructions.emit(Opcode::Return, &[]);
+                }
+
+                // Собираем данные о функции
+                let num_locals = self.symbol_table.num_definitions;
+                let free_symbols = self.symbol_table.free_symbols.clone();
+
+                // Выходим из scope
+                if let Some(outer) = self.symbol_table.outer.take() {
+                    self.symbol_table = *outer;
+                }
+
+                // Создаём CompiledFunction и добавляем в пул констант
+                let compiled_fn = Object::CompiledFunction(
+                    crate::object::CompiledFunction {
+                        instructions_offset: 0, // Будет исправлено позже
+                        num_locals,
+                        num_params: func.parameters.len(),
+                    },
+                );
+                let const_idx = self.instructions.add_constant(compiled_fn);
+
+                // Загружаем free-переменные на стек
+                for free_sym in &free_symbols {
+                    match free_sym.scope {
+                        SymbolScope::Local => {
+                            self.instructions
+                                .emit(Opcode::GetLocal, &[free_sym.index as u16]);
+                        }
+                        SymbolScope::Free => {
+                            self.instructions
+                                .emit(Opcode::GetFree, &[free_sym.index as u16]);
+                        }
+                        _ => {
+                            return Err(CompilerError::Unsupported(
+                                "invalid free variable scope".to_string(),
+                            ))
+                        }
+                    }
+                }
+
+                // Эмитируем опкод функции
+                if free_symbols.is_empty() {
+                    self.instructions.emit(Opcode::Constant, &[const_idx as u16]);
+                } else {
+                    self.instructions.emit(Opcode::Closure, &[const_idx as u16, free_symbols.len() as u16]);
+                }
+
+                Ok(())
+            }
             _ => Err(CompilerError::Unsupported(format!(
                 "Неподдерживаемое выражение: {:?}",
                 expression

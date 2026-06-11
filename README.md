@@ -53,6 +53,7 @@ graph TD
 
 <!-- BEGIN structure -->
 ```
+src/
     ast.rs
     bytecode/
         disassembler.rs
@@ -104,7 +105,7 @@ graph LR
 | `lexer` | Lexer |  |
 | `lib` |  |  |
 | `main` |  |  |
-| `object` | Class, ClassInstance, Struct, StructInstance, Interface, Method, MethodSignature, Environment, Object |  |
+| `object` | CompiledFunction, Class, ClassInstance, Struct, StructInstance, Interface, Method, MethodSignature, Environment, Object |  |
 | `parser` | Parser, ParserError |  |
 | `token` | Token, TokenType |  |
 | `vm` | VM, CallFrame |  |
@@ -115,18 +116,18 @@ graph LR
 <!-- BEGIN stats -->
 - **Файлов:** 14
 - **Модулей:** 12
-- **Публичных структур:** 45
+- **Публичных структур:** 46
 - **Публичных enum:** 10
 - **Публичных функций:** 2
-- **Строк кода:** 7351
+- **Строк кода:** 7424
 - **Модулей с тестами:** 8
 <!-- END stats -->
 
 ## 🔄 Последние изменения
 
 <!-- BEGIN changes -->
-*Автообновлено: 2026-06-11 22:38:39*
-*Всего модулей: 12, строк кода: 7351*
+*Автообновлено: 2026-06-11 23:22:11*
+*Всего модулей: 12, строк кода: 7424*
 <!-- END changes -->
 
 ## 📖 Глоссарий

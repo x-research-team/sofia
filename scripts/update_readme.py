@@ -318,3 +318,68 @@ def build_changes_section(changes: Optional[str], project_data: Dict) -> str:
     lines.append(f"*Автообновлено: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*")
     lines.append(f"*Всего модулей: {len(project_data['modules'])}, строк кода: {project_data['total_loc']}*")
     return "\n".join(lines)
+
+
+def backup_readme() -> Optional[Path]:
+    """Создать backup текущего README. Вернуть путь к backup или None."""
+    if not README_PATH.exists():
+        return None
+
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_path = BACKUP_DIR / f"README.md.{timestamp}"
+
+    shutil.copy2(README_PATH, backup_path)
+
+    # Ротация: оставить только последние 5
+    backups = sorted(BACKUP_DIR.glob("README.md.*"))
+    for old in backups[:-5]:
+        old.unlink()
+
+    return backup_path
+
+
+def validate_readme(content: str) -> Tuple[bool, List[str]]:
+    """Проверить корректность сгенерированного README. Вернуть (OK, [ошибки])."""
+    errors = []
+
+    if len(content) < 500:
+        errors.append(f"Content too short: {len(content)} chars (min 500)")
+
+    for name, (begin, end) in MARKERS.items():
+        if begin not in content:
+            errors.append(f"Missing BEGIN marker for '{name}'")
+        if end not in content:
+            errors.append(f"Missing END marker for '{name}'")
+        if begin in content and end in content:
+            # Проверяем, что BEGIN перед END
+            if content.index(begin) > content.index(end):
+                errors.append(f"BEGIN marker after END for '{name}'")
+
+    return len(errors) == 0, errors
+
+
+def rollback_readme() -> bool:
+    """Восстановить README из последнего backup. Вернуть True при успехе."""
+    backups = sorted(BACKUP_DIR.glob("README.md.*"))
+    if not backups:
+        logging.error("No backups found for rollback")
+        return False
+
+    latest = backups[-1]
+    shutil.copy2(latest, README_PATH)
+    logging.warning("Rollback to backup: %s", latest.name)
+    return True
+
+
+def setup_logging():
+    """Настроить логирование в файл и stdout."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(asctime)s] %(levelname)-5s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        handlers=[
+            logging.FileHandler(LOG_FILE),
+            logging.StreamHandler(),
+        ],
+    )

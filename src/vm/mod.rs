@@ -268,15 +268,25 @@ impl VM {
 
                 Opcode::Return => {
                     if self.frames.is_empty() {
-                        let result = if self.sp > 0 {
-                            self.stack[self.sp - 1].clone()
-                        } else {
-                            Object::Null
-                        };
+                        return Ok(Object::Null);
+                    }
+                    if let Some(frame) = self.frames.pop() {
+                        self.sp = frame.base_pointer - 1;
+                        self.ip = frame.return_addr;
+                        self.push(Object::Null)?;
+                    }
+                }
+
+                Opcode::ReturnValue => {
+                    let result = self.pop()?;
+                    if self.frames.is_empty() {
                         return Ok(result);
                     }
-                    // TODO: Реализовать возврат из функции с фреймами вызова
-                    return Err("Return из функций пока не реализован".to_string());
+                    if let Some(frame) = self.frames.pop() {
+                        self.sp = frame.base_pointer - 1;
+                        self.ip = frame.return_addr;
+                        self.push(result)?;
+                    }
                 }
 
                 Opcode::GetGlobal => {
@@ -316,14 +326,20 @@ impl VM {
 
                 Opcode::GetLocal => {
                     let idx = self.read_u8() as usize;
-                    let value = self.stack[idx].clone();
+                    let bp = self.frames.last()
+                        .map(|f| f.base_pointer)
+                        .unwrap_or(0);
+                    let value = self.stack[bp + idx].clone();
                     self.push(value)?;
                 }
 
                 Opcode::SetLocal => {
                     let idx = self.read_u8() as usize;
+                    let bp = self.frames.last()
+                        .map(|f| f.base_pointer)
+                        .unwrap_or(0);
                     let value = self.pop()?;
-                    self.stack[idx] = value;
+                    self.stack[bp + idx] = value;
                 }
 
                 Opcode::Array => {
@@ -370,15 +386,43 @@ impl VM {
                     }
                 }
 
-                Opcode::Call
-                | Opcode::New
+                Opcode::Call => {
+                    let num_args = self.read_u8() as usize;
+                    let fn_idx = self.sp - 1 - num_args;
+                    let func_obj = self.stack[fn_idx].clone();
+
+                    match func_obj {
+                        Object::CompiledFunction(cf) => {
+                            if num_args != cf.num_params {
+                                return Err(format!(
+                                    "wrong number of arguments: expected {}, got {}",
+                                    cf.num_params, num_args
+                                ));
+                            }
+
+                            self.frames.push(CallFrame {
+                                return_addr: self.ip,
+                                base_pointer: fn_idx + 1,
+                                num_locals: cf.num_locals,
+                            });
+
+                            for _ in num_args..cf.num_locals {
+                                self.push(Object::Null)?;
+                            }
+
+                            self.ip = cf.instructions_offset;
+                        }
+                        _ => return Err(format!("not a function: {}", func_obj.type_str())),
+                    }
+                }
+
+                Opcode::New
                 | Opcode::Class
                 | Opcode::GetProperty
                 | Opcode::SetProperty
                 | Opcode::This
                 | Opcode::Super
                 | Opcode::MapToAst
-                | Opcode::ReturnValue
                 | Opcode::GetFree
                 | Opcode::SetFree
                 | Opcode::GetCurrentClosure
